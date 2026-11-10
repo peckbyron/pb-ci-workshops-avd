@@ -3,6 +3,12 @@ aaa_authorization:
     default: local
 aaa_root:
   disabled: true
+banners:
+  motd: 'You shall not pass. Unless you are authorized. Then you shall pass.
+
+    EOF
+
+    '
 config_end: true
 daemon_terminattr:
   cvaddrs:
@@ -91,6 +97,15 @@ local_users:
   sha512_password: $6$392c691d900da550$4vzd2FhW3xrCxnlJOt.oKKLvYTZnijTJ37NSUd9VRGXthxJNLW0fkMUts75M2csa3eS7mYcqnQQ9JMXCJuP3O1
   ssh_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDJ8/aED60g89yIwyI60okiWf/h4V7VF6Og01Ih3Kyd+/67sxNsHKv75BTlu19Ajrb0HmdH5mQzL56+a35/SM/0PAWIr7dJkY4fJJJ8RRpt6wr9DC4HPc4EKyLtoToEl4zFUTeNi7jPmi5Qir+3oty39E7GnzlQ4B21h/0nN0/a/6h5KjrOwJztOj8MlFPNJT+L3w0eUhOVR0B13Sa5tIAXtnoVtZm2pwZW6epBwL3I6BgNoxZP+oCPMgUj3JT9bcUHq3hBpInxNmTijq2IZ+vBjew+hZKU7DBAopx5oPcV/7J6S9bLDuNB1526OUpa+A2i8hfJEtR3SrE0su7T9abL
     arista@portland-automationws-20-07497648-eos
+logging:
+  vrfs:
+  - name: default
+    source_interface: Management0
+    hosts:
+    - name: 10.200.0.108
+      protocol: udp
+    - name: 10.200.1.108
+      protocol: udp
 loopback_interfaces:
 - name: Loopback0
   description: ROUTER_ID
@@ -214,6 +229,14 @@ router_bgp:
     password: Q4fqtbqcZ7oQuKfuWtNGRQ==
     send_community: all
     maximum_routes: 0
+  - name: EVPN-OVERLAY-CORE
+    metadata:
+      type: evpn
+    update_source: Loopback0
+    bfd: true
+    ebgp_multihop: 15
+    send_community: all
+    maximum_routes: 0
   neighbors:
   - ip_address: 10.252.2.8
     peer_group: MLAG-IPv4-UNDERLAY-PEER
@@ -244,6 +267,12 @@ router_bgp:
     metadata:
       peer: s2-spine2
     description: s2-spine2_Loopback0
+  - ip_address: 10.250.1.8
+    peer_group: EVPN-OVERLAY-CORE
+    remote_as: '65103'
+    metadata:
+      peer: s1-brdr2
+    description: s1-brdr2
   - ip_address: 172.16.255.2
     peer_group: IPv4-UNDERLAY-PEERS
     remote_as: '65103'
@@ -260,9 +289,15 @@ router_bgp:
       tenants:
       - S2_FABRIC
     rd: 10.250.2.8:10010
+    rd_evpn_domain:
+      domain: remote
+      rd: 10.250.2.8:10010
     route_targets:
       both:
       - 10010:10010
+      import_export_evpn_domains:
+      - domain: remote
+        route_target: 10010:10010
     redistribute_routes:
     - learned
   - id: 20
@@ -270,15 +305,28 @@ router_bgp:
       tenants:
       - S2_FABRIC
     rd: 10.250.2.8:10020
+    rd_evpn_domain:
+      domain: remote
+      rd: 10.250.2.8:10020
     route_targets:
       both:
       - 10020:10020
+      import_export_evpn_domains:
+      - domain: remote
+        route_target: 10020:10020
     redistribute_routes:
     - learned
   address_family_evpn:
+    neighbor_default:
+      next_hop_self_received_evpn_routes:
+        enable: true
+        inter_domain: true
     peer_groups:
     - name: EVPN-OVERLAY-PEERS
       activate: true
+    - name: EVPN-OVERLAY-CORE
+      activate: true
+      domain_remote: true
   address_family_ipv4:
     peer_groups:
     - name: MLAG-IPv4-UNDERLAY-PEER
@@ -286,6 +334,8 @@ router_bgp:
     - name: IPv4-UNDERLAY-PEERS
       activate: true
     - name: EVPN-OVERLAY-PEERS
+      activate: false
+    - name: EVPN-OVERLAY-CORE
       activate: false
   vrfs:
   - name: OVERLAY
